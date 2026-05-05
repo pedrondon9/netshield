@@ -72,6 +72,7 @@ MODEL_AVAILABLE = MODEL_PATH.exists() and SCALER_PATH.exists()
 
 # ── Tests con modelo real ─────────────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not MODEL_AVAILABLE, reason="Modelo no disponible en este entorno")
 @pytest.mark.modelo_real
 class TestModeloReal:
@@ -124,6 +125,7 @@ class TestModeloReal:
             assert 0.0 <= proba <= 1.0, f"Probabilidad fuera de rango: {proba}"
 
 # ── Tests de la API con mocks ─────────────────────────────────────────────────
+
 
 class TestApiPredicciones:
     """Valida que la API interpreta correctamente las probabilidades del modelo."""
