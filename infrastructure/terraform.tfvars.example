@@ -10,7 +10,7 @@ email_alertas     = "tu@email.com"
 droplet_name      = "mi-droplet"
 
 # Región del Droplet (ams3, fra1, nyc3, sfo3...)
-do_region         = "ams3"
+do_region         = "fra1"
 
 # Opcionales
 # entorno         = "dev"
