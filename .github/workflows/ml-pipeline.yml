@@ -16,17 +16,14 @@ jobs:
 
     env:
       MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-      AWS_DEFAULT_REGION: eu-west-1
+      # Credenciales de DigitalOcean Spaces (compatible con API S3)
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: https://${{ vars.DO_REGION }}.digitaloceanspaces.com
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configurar credenciales AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-west-1
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -37,11 +34,16 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Descargar datos desde S3
+      - name: Instalar AWS CLI
+        run: pip install awscli
+
+      - name: Descargar datos desde Spaces
         run: |
-          mkdir -p data/raw
-          aws s3 cp s3://netshield-data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
-            data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+          mkdir -p src/data/raw
+          aws s3 cp \
+            s3://netshield-data-${{ vars.DO_REGION }}/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
+            src/data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
+            --endpoint-url $AWS_ENDPOINT_URL
 
       - name: Ingesta y validación
         run: python -m src.data.ingesta
@@ -56,16 +58,19 @@ jobs:
         # El script falla (exit 1) si no supera umbrales → pipeline se detiene
         run: python -m src.models.entrenamiento
 
-      - name: Subir modelo a S3
+      - name: Subir modelo a Spaces
         run: |
-          aws s3 cp models/ids_model.pkl \
-            s3://netshield-models/$(git rev-parse --short HEAD)/ids_model.pkl
-          aws s3 cp models/scaler.pkl \
-            s3://netshield-models/$(git rev-parse --short HEAD)/scaler.pkl
+          COMMIT=$(git rev-parse --short HEAD)
+          aws s3 cp src/models/ids_model.pkl \
+            s3://netshield-models-${{ vars.DO_REGION }}/$COMMIT/ids_model.pkl \
+            --endpoint-url $AWS_ENDPOINT_URL
+          aws s3 cp src/models/scaler.pkl \
+            s3://netshield-models-${{ vars.DO_REGION }}/$COMMIT/scaler.pkl \
+            --endpoint-url $AWS_ENDPOINT_URL
 
       - name: Notificar éxito
         if: success()
-        run: echo "Modelo entrenado y registrado. Listo para CD."
+        run: echo "Modelo entrenado y registrado en Spaces. Listo para CD."
 
       - name: Notificar fallo
         if: failure()
