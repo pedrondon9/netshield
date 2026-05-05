@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p src/data/raw
           aws s3 cp \
-            s3://netshield-pndng-data-dev/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
+            s3://netshield-data-${{ vars.DO_REGION }}/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
             src/data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
             --endpoint-url $AWS_ENDPOINT_URL
 
@@ -62,10 +62,10 @@ jobs:
         run: |
           COMMIT=$(git rev-parse --short HEAD)
           aws s3 cp src/models/ids_model.pkl \
-            s3://netshield-pndng-models-dev/$COMMIT/ids_model.pkl \
+            s3://netshield-models-${{ vars.DO_REGION }}/$COMMIT/ids_model.pkl \
             --endpoint-url $AWS_ENDPOINT_URL
           aws s3 cp src/models/scaler.pkl \
-            s3://netshield-pndng-models-dev/$COMMIT/scaler.pkl \
+            s3://netshield-models-${{ vars.DO_REGION }}/$COMMIT/scaler.pkl \
             --endpoint-url $AWS_ENDPOINT_URL
 
       - name: Notificar éxito
