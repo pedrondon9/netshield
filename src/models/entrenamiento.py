@@ -14,7 +14,7 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import (
     roc_auc_score, f1_score, classification_report,
-    precision_score, recall_score, confusion_matrix,
+    precision_score, recall_score,
 )
 
 from src.models.evaluacion import supera_umbrales
@@ -91,7 +91,7 @@ def main() -> None:
         mlflow.log_metric("cv_f1_macro_mean", cv_f1)
 
         logger.info("AUC-ROC: %.4f | F1-macro: %.4f | Recall ataque: %.4f",
-                     auc_roc, f1_macro, recall_ataque)
+                    auc_roc, f1_macro, recall_ataque)
         logger.info("\n%s", classification_report(
             y_test, y_pred, target_names=["BENIGN", "ATAQUE"],
         ))

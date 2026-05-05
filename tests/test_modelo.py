@@ -1,6 +1,5 @@
 """Tests del módulo de evaluación (quality gate)."""
 
-import pytest
 from src.models.evaluacion import supera_umbrales
 
 

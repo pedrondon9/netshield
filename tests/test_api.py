@@ -1,7 +1,6 @@
 """Tests de la API FastAPI usando TestClient."""
 
 import numpy as np
-import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
@@ -45,7 +44,6 @@ def test_health_check_ok():
 def test_predict_devuelve_200():
     with patch("src.api.app.modelo", mock_modelo):
         with patch("src.api.app.scaler", mock_scaler):
-            import pandas as pd
             mock_scaler.transform.return_value = np.array([[0.1] * 14])
             mock_modelo.predict_proba.return_value = np.array([[0.15, 0.85]])
             response = client.post("/predict", json=FLOW_EJEMPLO)
