@@ -1,0 +1,6 @@
+[run]
+omit =
+    # Scripts de pipeline que requieren datos reales y MLflow.
+    # Se validan en ml-pipeline.yml, no en los unit tests.
+    src/data/ingesta.py
+    src/models/entrenamiento.py
