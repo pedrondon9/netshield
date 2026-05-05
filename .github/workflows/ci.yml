@@ -149,13 +149,9 @@ jobs:
             echo "$DIGITALOCEAN_ACCESS_TOKEN" | \
               docker login registry.digitalocean.com \
               -u "$DIGITALOCEAN_ACCESS_TOKEN" --password-stdin
-            cat > /opt/netshield/.env <<EOF
-DOCR_NAME=$DOCR_NAME
-SPACES_MODELS_BUCKET=netshield-pndng-models-dev
-DO_REGION=$DO_REGION
-AWS_ACCESS_KEY_ID=$SPACES_ACCESS_KEY
-AWS_SECRET_ACCESS_KEY=$SPACES_SECRET_KEY
-EOF
+            printf 'DOCR_NAME=%s\nSPACES_MODELS_BUCKET=netshield-pndng-models-dev\nDO_REGION=%s\nAWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\n' \
+              "$DOCR_NAME" "$DO_REGION" "$SPACES_ACCESS_KEY" "$SPACES_SECRET_KEY" \
+              > /opt/netshield/.env
             cd /opt/netshield
             docker compose -f docker-compose.prod.yml pull api
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
