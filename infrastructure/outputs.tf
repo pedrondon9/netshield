@@ -27,3 +27,8 @@ output "spaces_modelos" {
   description = "Bucket Spaces de modelos"
   value       = digitalocean_spaces_bucket.modelos.bucket_domain_name
 }
+
+output "registry_endpoint" {
+  description = "Endpoint del Container Registry para usar en docker-compose y CI"
+  value       = "registry.digitalocean.com/${digitalocean_container_registry.netshield.name}"
+}

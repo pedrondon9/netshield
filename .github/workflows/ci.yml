@@ -1,12 +1,13 @@
-name: CI — Lint y Tests
+name: Pipeline — CI/CD
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
+  # ── 1. Siempre: lint y tests ───────────────────────────────────────────────
   lint-and-test:
     runs-on: ubuntu-latest
 
@@ -42,3 +43,123 @@ jobs:
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── 2. Solo push a main: construir imagen y subirla al Registry ────────────
+  build-and-push:
+    name: Build y Push al Container Registry
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Autenticar con el Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      - name: Construir imagen Docker
+        run: |
+          docker build \
+            -f docker/Dockerfile.api \
+            -t registry.digitalocean.com/${{ vars.DOCR_NAME }}/api:${{ github.sha }} \
+            -t registry.digitalocean.com/${{ vars.DOCR_NAME }}/api:latest \
+            .
+
+      - name: Subir imagen al Container Registry
+        run: |
+          docker push registry.digitalocean.com/${{ vars.DOCR_NAME }}/api:${{ github.sha }}
+          docker push registry.digitalocean.com/${{ vars.DOCR_NAME }}/api:latest
+
+  # ── 3. Solo push a main: Terraform asegura la infraestructura ─────────────
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: infrastructure/
+        run: |
+          terraform init \
+            -backend-config="endpoint=https://${{ vars.DO_REGION }}.digitaloceanspaces.com" \
+            -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_spaces_access_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_spaces_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_droplet_name: ${{ vars.DROPLET_NAME }}
+          TF_VAR_do_region: ${{ vars.DO_REGION }}
+          TF_VAR_email_alertas: ${{ secrets.EMAIL_ALERTAS }}
+
+      - name: Terraform Apply
+        working-directory: infrastructure/
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_spaces_access_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_spaces_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_droplet_name: ${{ vars.DROPLET_NAME }}
+          TF_VAR_do_region: ${{ vars.DO_REGION }}
+          TF_VAR_email_alertas: ${{ secrets.EMAIL_ALERTAS }}
+
+  # ── 4. Solo push a main: desplegar en el Droplet ──────────────────────────
+  deploy:
+    name: Deploy al Droplet
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar clave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DO_DROPLET_IP }} >> ~/.ssh/known_hosts
+
+      - name: Sincronizar docker-compose.prod.yml al Droplet
+        run: |
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            docker-compose.prod.yml \
+            root@${{ secrets.DO_DROPLET_IP }}:/opt/netshield/
+
+      - name: Actualizar servicio en el Droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_DROPLET_IP }}
+          username: root
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          envs: DIGITALOCEAN_ACCESS_TOKEN,DOCR_NAME
+          script: |
+            echo "$DIGITALOCEAN_ACCESS_TOKEN" | \
+              docker login registry.digitalocean.com \
+              -u "$DIGITALOCEAN_ACCESS_TOKEN" --password-stdin
+            echo "DOCR_NAME=$DOCR_NAME" > /opt/netshield/.env
+            cd /opt/netshield
+            docker compose -f docker-compose.prod.yml pull api
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DOCR_NAME: ${{ vars.DOCR_NAME }}
+
+      - name: Health check post-deploy
+        run: |
+          sleep 20
+          curl -f http://${{ secrets.DO_DROPLET_IP }}:8000/health || exit 1
+          echo "Deploy exitoso — NetShield operativo."

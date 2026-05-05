@@ -85,7 +85,7 @@ def imputar_nulos(df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Imputando %d NaN con mediana por columna", n_nulos)
         for col in cols_num:
             if df[col].isna().any():
-                df[col].fillna(df[col].median(), inplace=True)
+                df[col] = df[col].fillna(df[col].median())
     return df
 
 

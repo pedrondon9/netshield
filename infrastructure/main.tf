@@ -6,12 +6,32 @@ terraform {
       version = "~> 2.0"
     }
   }
+
+  # Estado remoto en DO Spaces — crear el bucket "netshield-tf-state" manualmente una sola vez
+  # antes del primer terraform init. Las credenciales se pasan vía -backend-config en cd.yml.
+  backend "s3" {
+    bucket                      = "netshield-tf-state"
+    key                         = "prod/terraform.tfstate"
+    region                      = "us-east-1"
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    force_path_style            = true
+  }
 }
 
 provider "digitalocean" {
   token             = var.do_token
   spaces_access_id  = var.spaces_access_id
   spaces_secret_key = var.spaces_secret_key
+}
+
+# ── Container Registry ────────────────────────────────────────────────────────
+
+resource "digitalocean_container_registry" "netshield" {
+  name                   = var.nombre_proyecto
+  subscription_tier_slug = "basic"
+  region                 = var.do_region
 }
 
 # ── Referencia al Droplet existente ──────────────────────────────────────────

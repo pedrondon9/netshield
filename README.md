@@ -10,7 +10,7 @@
 
 ## Descripción
 
-Sistema MLOps completo para la detección automática de intrusiones en tráfico de red usando el dataset CICIDS2017. El pipeline cubre el ciclo de vida completo del modelo: ingesta y validación de datos, preprocesamiento, ingeniería de features, entrenamiento con quality gate automático, contenerización y despliegue en producción sobre un Droplet de DigitalOcean con monitoreo continuo.
+Sistema MLOps completo para la detección automática de intrusiones en tráfico de red usando el dataset CICIDS2017. El pipeline cubre el ciclo de vida completo del modelo: ingesta y validación de datos, preprocesamiento, ingeniería de features, entrenamiento con quality gate automático, contenerización y despliegue en producción sobre un servidor DigitalOcean con monitoreo continuo.
 
 **Caso de negocio:** Los equipos SOC procesan miles de alertas diarias con una tasa de falsos positivos superior al 40%. NetShield clasifica tráfico de red como benigno o malicioso en tiempo real (latencia p95 < 20 ms), reduciendo el tiempo medio de detección de horas a milisegundos.
 
@@ -18,47 +18,69 @@ Sistema MLOps completo para la detección automática de intrusiones en tráfico
 
 ## Arquitectura
 
+### Pipeline de datos y modelo
+
 ```
-DATOS
-  src/data/raw/
-       │
-       ▼
-  ingesta.py              carga CSV + validación de esquema y tipos
-       │
-       ▼
-  preprocesamiento.py     limpieza, codificación binaria, selección de 14 features
-       │
-       ▼
-  feature_engineering.py  RobustScaler (robusto a outliers de tráfico DDoS)
-       │
-       ▼
-MODELO
-  entrenamiento.py        XGBoost + MLflow tracking
-       │
-       ├── quality gate ── F1-macro ≥ 0.85
-       │                   AUC-ROC  ≥ 0.90    si falla → pipeline se detiene
-       │                   Recall   ≥ 0.80
-       ▼
-  src/models/ids_model.pkl + scaler.pkl
+src/data/raw/
+      │
+      ▼
+ingesta.py              ← carga CSV + validación de esquema y tipos
+      │
+      ▼
+preprocesamiento.py     ← limpieza, codificación binaria, selección de 14 features
+      │
+      ▼
+feature_engineering.py  ← RobustScaler (robusto a outliers de tráfico DDoS)
+      │
+      ▼
+entrenamiento.py        ← XGBoost + MLflow tracking
+      │
+      ├── quality gate ─── F1-macro ≥ 0.85
+      │                    AUC-ROC  ≥ 0.90     si falla → pipeline se detiene
+      │                    Recall   ≥ 0.80
+      ▼
+src/models/ids_model.pkl + scaler.pkl
+```
 
-API
-  FastAPI  /predict  /health  /metrics
-  Docker Compose (build en el propio Droplet)
-       │
-       ▼
-PRODUCCIÓN — DigitalOcean Droplet (existente)
-  ├── API     → :8000   (imagen construida en el servidor)
-  └── MLflow  → :5000   (datos persistentes en /data/mlflow)
+### Pipeline CI/CD
 
-  Terraform gestiona sobre el Droplet existente:
-  ├── Firewall  (puertos 22, 8000, 5000)
-  ├── Spaces buckets  (datos y modelos)
-  └── Alertas  CPU >85% · Memoria >90% · Disco >80%
+```
+Tu Mac
+  └─► git push → main
+           │
+           ▼
+    GitHub Actions — CI (ci.yml)
+    ├── 1. Lint con flake8
+    ├── 2. Tests con pytest (cobertura ≥ 70%)
+    └── 3. Build imagen Docker → push a Container Registry (DOCR)
+                          │
+                          │  (solo si CI termina con éxito)
+                          ▼
+    GitHub Actions — CD (cd.yml)
+    ├── 1. Terraform apply  ← asegura que Registry, Spaces, Firewall y
+    │                          alertas existen y están configurados
+    └── 2. SSH al Droplet
+             ├── docker login al Container Registry
+             ├── docker compose pull  ← descarga la imagen ya construida
+             └── docker compose up    ← reinicia el servicio en caliente
+                          │
+                          ▼
+    DigitalOcean Droplet
+    ├── API     → :8000   (FastAPI)
+    └── MLflow  → :5000   (datos persistentes en /data/mlflow)
+```
 
-CI/CD (GitHub Actions)
-  push → cualquier rama   ──► ci.yml           lint + tests + cobertura ≥ 70%
-  push → main (src/data/) ──► ml-pipeline.yml  entrenamiento + quality gate
-  git tag v*.*.*          ──► cd.yml           rsync → build en Droplet → health check
+### Infraestructura gestionada por Terraform
+
+```
+Droplet existente (referenciado por nombre, no creado por TF)
+├── Container Registry (basic) — imágenes Docker
+├── Spaces bucket netshield-data-dev — datos y artefactos
+├── Spaces bucket netshield-models-dev — modelos MLflow
+├── Firewall — puertos 22, 8000, 5000
+└── Monitor Alerts — email si CPU >85% · Memoria >90% · Disco >80%
+
+Estado de Terraform almacenado en Spaces (bucket: netshield-tf-state)
 ```
 
 ---
@@ -96,8 +118,8 @@ netshield/
 │   ├── models/
 │   │   ├── entrenamiento.py         # XGBoost + MLflow + quality gate
 │   │   ├── evaluacion.py            # Umbrales mínimos para despliegue
-│   │   ├── ids_model.pkl            # Modelo entrenado (generado localmente)
-│   │   └── scaler.pkl               # Scaler ajustado (generado localmente)
+│   │   ├── ids_model.pkl            # Modelo entrenado (generado, no se commitea)
+│   │   └── scaler.pkl               # Scaler ajustado (generado, no se commitea)
 │   └── api/
 │       ├── app.py                   # FastAPI: /predict /health /metrics
 │       └── schemas.py               # Pydantic: FlowInput, DetectionOutput
@@ -109,18 +131,17 @@ netshield/
 ├── docker/
 │   ├── Dockerfile.api               # Imagen producción (python:3.11-slim)
 │   └── Dockerfile.train             # Imagen entrenamiento
-├── docker-compose.yml               # Desarrollo local (MLflow con volumen local)
-├── docker-compose.prod.yml          # Producción (MLflow con /data/mlflow + restart)
-├── deploy.sh                        # Despliega en el Droplet vía rsync + SSH
+├── docker-compose.yml               # Desarrollo local: build local + MLflow
+├── docker-compose.prod.yml          # Producción: imagen desde Container Registry
 ├── infrastructure/
-│   ├── main.tf                      # Spaces, Firewall y alertas sobre Droplet existente
+│   ├── main.tf                      # Registry, Spaces, Firewall, alertas, backend S3
 │   ├── variables.tf
 │   ├── outputs.tf
-│   └── terraform.tfvars.example
+│   └── terraform.tfvars.example     # Plantilla de credenciales
 ├── .github/workflows/
-│   ├── ci.yml                       # Lint + tests en cada push
+│   ├── ci.yml                       # Lint + tests + build Docker + push a DOCR
 │   ├── ml-pipeline.yml              # Entrenamiento + quality gate en push a main
-│   └── cd.yml                       # rsync al Droplet + build Docker + health check
+│   └── cd.yml                       # Terraform apply + deploy al Droplet
 ├── notebooks/
 │   └── 01_EDA.ipynb
 ├── docs/sprints/
@@ -135,10 +156,9 @@ netshield/
 | Herramienta | Versión | Para qué |
 |---|---|---|
 | Python | 3.11+ | Ejecutar el pipeline local |
-| Docker + Docker Compose | 24+ | Desarrollo local |
+| Docker + Docker Compose | 24+ | Build de imagen y desarrollo local |
 | Terraform | 1.5+ | Gestionar recursos en DigitalOcean |
-| rsync | cualquiera | Sincronizar código al Droplet |
-| Droplet DigitalOcean | existente | Servidor de producción |
+| Cuenta DigitalOcean | — | Droplet existente, Registry, Spaces |
 
 ---
 
@@ -155,7 +175,7 @@ pip install -r requirements-dev.txt
 
 ### Descargar el dataset
 
-Descargar los CSV desde [UNB CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) y colocar en `src/data/raw/`. Archivo mínimo requerido:
+Descargar los CSV desde [UNB CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) y colocar en `src/data/raw/`. El archivo mínimo requerido:
 
 ```
 src/data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
@@ -166,7 +186,7 @@ src/data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
 Cada paso lee la salida del anterior. Ejecutar desde la raíz del proyecto:
 
 ```bash
-# 1. Ingesta y validación
+# 1. Ingesta y validación del dataset
 python -m src.data.ingesta
 # → src/data/validated/cicids_validated.csv
 
@@ -182,6 +202,7 @@ python -m src.features.feature_engineering
 # 4. Entrenamiento + MLflow tracking + quality gate
 python -m src.models.entrenamiento
 # → src/models/ids_model.pkl
+# → experimento registrado en mlruns/
 ```
 
 Si el modelo no supera los umbrales del quality gate (F1 ≥ 0.85, AUC-ROC ≥ 0.90, Recall ≥ 0.80), el paso 4 falla con un mensaje explícito y no produce el `.pkl`.
@@ -190,23 +211,25 @@ Si el modelo no supera los umbrales del quality gate (F1 ≥ 0.85, AUC-ROC ≥ 0
 
 ```bash
 mlflow ui --port 5000
-# → http://localhost:5000   experimento: "netshield-ids"
+# → http://localhost:5000  experimento: "netshield-ids"
 ```
 
 ### Levantar la API en local
 
 ```bash
 docker compose up --build
-# API    → http://localhost:8000
-# Docs   → http://localhost:8000/docs
-# MLflow → http://localhost:5000
+# API en    http://localhost:8000
+# Docs en   http://localhost:8000/docs
+# MLflow en http://localhost:5000
 ```
 
 ### Probar la API
 
 ```bash
+# Health check
 curl http://localhost:8000/health
 
+# Clasificar un flujo de red
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{
@@ -254,125 +277,110 @@ pytest tests/ -v --cov=src --cov-report=term-missing
 
 ---
 
-## 2. Despliegue en producción (DigitalOcean)
+## 2. Configuración inicial (una sola vez)
 
-El proyecto se despliega sobre el **Droplet existente**. Docker se instala en el propio servidor y la imagen se construye allí directamente — no se necesita un Container Registry externo.
+Antes de que el pipeline CI/CD pueda ejecutarse hay que crear dos recursos manualmente en DigitalOcean.
 
-### Paso 1 — Configurar Terraform
+### Paso 1 — Bucket para el estado de Terraform
 
-Terraform gestiona únicamente los recursos auxiliares: Spaces (almacenamiento), Firewall y alertas de monitoreo. No toca el Droplet.
+El pipeline corre `terraform apply` desde GitHub Actions. Terraform necesita guardar su estado en algún lugar persistente. Crear el bucket en el panel de DigitalOcean Spaces:
 
-Credenciales necesarias de DigitalOcean:
-- **API Token** → `cloud.digitalocean.com/account/api/tokens`
-- **Spaces Keys** → `cloud.digitalocean.com/account/api/spaces-keys`
-
-```bash
-cd infrastructure/
-cp terraform.tfvars.example terraform.tfvars
+```
+Nombre:  netshield-tf-state
+Región:  la misma que tu Droplet (ej. fra1)
+Acceso:  Private
 ```
 
-Editar `terraform.tfvars`:
+Solo hay que hacerlo una vez. Terraform lo usa en cada ejecución del CD para leer y escribir el estado.
 
-```hcl
-do_token          = "dop_v1_..."
-spaces_access_id  = "..."
-spaces_secret_key = "..."
-email_alertas     = "tu@email.com"
+### Paso 2 — Secrets y Variables en GitHub Actions
 
-# Nombre exacto del Droplet tal como aparece en el panel de DO
-droplet_name      = "mi-droplet"
+Ir a `Settings → Secrets and variables → Actions` en el repositorio.
 
-# Región del Droplet (ams3, fra1, nyc3...)
-do_region         = "ams3"
-```
+**Secrets** (valores sensibles):
 
-```bash
-terraform init
-terraform plan     # revisar antes de aplicar
-terraform apply    # confirmar con "yes"
-```
-
-Recursos que crea Terraform:
-
-| Recurso | Descripción |
+| Secret | Dónde obtenerlo |
 |---|---|
-| Spaces `netshield-data-dev` | Almacenamiento de datos raw y procesados |
-| Spaces `netshield-models-dev` | Artefactos de modelos MLflow |
-| Firewall | Abre puertos 22, 8000 y 5000 en el Droplet |
-| Monitor Alert ×3 | Email si CPU >85%, Memoria >90% o Disco >80% |
+| `DIGITALOCEAN_ACCESS_TOKEN` | `cloud.digitalocean.com/account/api/tokens` |
+| `DO_DROPLET_IP` | IP del Droplet (panel de DO) |
+| `DO_SSH_PRIVATE_KEY` | Contenido de `~/.ssh/id_rsa` (clave privada SSH del Droplet) |
+| `AWS_ACCESS_KEY_ID` | Clave de acceso Spaces · `cloud.digitalocean.com/account/api/spaces-keys` |
+| `AWS_SECRET_ACCESS_KEY` | Clave secreta Spaces (mismo panel) |
+| `EMAIL_ALERTAS` | Email para recibir alertas de CPU/Memoria/Disco |
+| `MLFLOW_TRACKING_URI` | URI del servidor MLflow en producción |
+| `CODECOV_TOKEN` | codecov.io (opcional) |
 
-### Paso 2 — Desplegar con deploy.sh
+> `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` son tus claves de **DigitalOcean Spaces**, no de AWS. Las usa Terraform y boto3 porque Spaces es compatible con la API S3.
 
-El script sincroniza el código y gestiona el servidor en un solo comando:
+**Variables** (valores no sensibles):
 
-1. Copia el proyecto al Droplet con `rsync` (excluye datos crudos, entornos virtuales y carpetas de Terraform)
-2. Instala Docker en el servidor si no está instalado
-3. Crea el directorio persistente `/data/mlflow` para la base de datos de MLflow
-4. Registra un servicio `systemd` llamado `netshield` que arranca automáticamente con el servidor
-5. Construye la imagen Docker directamente en el Droplet (`docker compose build`)
-6. Arranca los contenedores y verifica que la API responde
+| Variable | Ejemplo | Para qué |
+|---|---|---|
+| `DO_REGION` | `fra1` | Región del Droplet y endpoint del backend de Terraform |
+| `DROPLET_NAME` | `netshield-server` | Nombre exacto del Droplet en el panel de DO |
+| `DOCR_NAME` | `netshield` | Nombre del Container Registry (debe ser único en toda la plataforma) |
 
-```bash
-# Ejecutar desde la raíz del proyecto
-./deploy.sh <IP_DEL_DROPLET>
-```
+### Paso 3 — Primer despliegue manual del docker-compose en el Droplet
 
-Al terminar:
-
-```
-==> Deploy exitoso. API operativa en http://<IP>:8000
-```
-
-**Despliegues posteriores** (nueva versión del modelo o del código): mismo comando, el script solo sincroniza los cambios y reconstruye la imagen.
+La primera vez hay que crear el directorio en el servidor:
 
 ```bash
-./deploy.sh <IP_DEL_DROPLET>
+ssh root@<IP>
+mkdir -p /opt/netshield /data/mlflow
 ```
 
-### Paso 3 — Verificar
-
-```bash
-# Health check
-curl http://<IP>:8000/health
-
-# Logs en tiempo real
-ssh root@<IP> journalctl -u netshield -f
-
-# Estado de los contenedores
-ssh root@<IP> docker compose -f /opt/netshield/docker-compose.prod.yml ps
-```
+A partir de aquí, el pipeline CD se encarga de todo en cada push.
 
 ---
 
-## 3. CI/CD con GitHub Actions
+## 3. CI/CD — Flujo automático
 
-### Secrets necesarios en GitHub
-
-Configurar en `Settings → Secrets and variables → Actions`:
-
-| Secret | Valor |
-|---|---|
-| `DO_DROPLET_IP` | IP del Droplet |
-| `DO_SSH_PRIVATE_KEY` | Contenido de `~/.ssh/id_rsa` (clave privada SSH) |
-| `CODECOV_TOKEN` | Token de Codecov (opcional) |
-
-### Pipelines
-
-| Workflow | Disparador | Qué hace |
-|---|---|---|
-| `ci.yml` | Push a cualquier rama | Flake8 + pytest + cobertura ≥ 70% |
-| `ml-pipeline.yml` | Push a `main` con cambios en `src/` o `data/` | Entrena el modelo y verifica el quality gate |
-| `cd.yml` | Tag `v*.*.*` | rsync al Droplet → `docker compose build` → health check |
-
-### Flujo de release
+Una vez completada la configuración inicial, el único comando necesario es:
 
 ```bash
-# Cuando CI pasa en main, crear un tag semver para disparar el deploy
-git tag v1.0.0
-git push origin v1.0.0
-# GitHub Actions sincroniza el código, construye la imagen en el Droplet
-# y verifica que la API arranca correctamente
+git push origin main
 ```
+
+También se activa al abrir o actualizar un **Pull Request** hacia `main` (en ese caso solo corren los tests, sin despliegue).
+
+### Lo que ocurre automáticamente
+
+Todo el pipeline está definido en un único workflow (`ci.yml`) con cuatro jobs encadenados:
+
+```
+push a main  ──►  lint-and-test  ──►  build-and-push  ──►  terraform  ──►  deploy
+PR a main    ──►  lint-and-test  (solo tests, sin despliegue)
+```
+
+**Job 1 — `lint-and-test`** (push y PR):
+1. Flake8 sobre `src/` y `tests/`
+2. Pytest con cobertura ≥ 70%
+
+**Job 2 — `build-and-push`** (solo push a `main`):
+1. Construye la imagen Docker
+2. La sube al Container Registry con dos tags: `:<git-sha>` y `:latest`
+
+**Job 3 — `terraform`** (solo push a `main`):
+1. `terraform apply` — verifica y reconcilia la infraestructura (Registry, Spaces, Firewall, alertas)
+
+**Job 4 — `deploy`** (solo push a `main`):
+1. Copia `docker-compose.prod.yml` al Droplet
+2. SSH al Droplet: autentica con el Registry, hace `docker compose pull` de la nueva imagen y reinicia el servicio
+3. Health check final contra `/health`
+
+**ML Pipeline (`ml-pipeline.yml`)** — se dispara en push a `main` con cambios en `src/` o `data/`:
+1. Descarga los datos desde Spaces
+2. Ejecuta el pipeline completo: ingesta → preprocesamiento → features → entrenamiento
+3. Verifica el quality gate (F1 ≥ 0.85, AUC-ROC ≥ 0.90, Recall ≥ 0.80)
+4. Si pasa: sube el modelo a Spaces. Si falla: el pipeline se detiene sin desplegar.
+
+### Resumen de pipelines
+
+| Workflow | Disparador | Resultado |
+|---|---|---|
+| `ci.yml` | Push a `main` | Tests → Build → Terraform → Deploy |
+| `ci.yml` | PR a `main` | Solo tests (sin despliegue) |
+| `ml-pipeline.yml` | Push a `main` con cambios en `src/` o `data/` | Entrena y registra nuevo modelo |
 
 ---
 
@@ -435,7 +443,7 @@ Contadores acumulados desde el inicio del proceso:
 | `modelo_version` | string | Versión del modelo activo |
 | `latencia_ms` | float | Tiempo de inferencia en ms |
 
-Documentación interactiva Swagger disponible en `/docs`.
+Documentación interactiva Swagger en `/docs`.
 
 ---
 
@@ -451,7 +459,7 @@ Documentación interactiva Swagger disponible en `/docs`.
 | `subsample` | 0.8 |
 | `colsample_bytree` | 0.8 |
 
-**Resultados:**
+**Resultados obtenidos:**
 
 | Métrica | Resultado | Umbral mínimo |
 |---|---|---|
@@ -470,14 +478,14 @@ Si el modelo no supera los tres umbrales simultáneamente, `entrenamiento.py` la
 | Mecanismo | Descripción |
 |---|---|
 | `GET /metrics` | Contadores en tiempo real: predicciones, ataques por nivel, latencia p95 |
-| Logs estructurados | Cada predicción emite una línea con `hash`, `es_ataque`, `proba`, `nivel` y `latencia_ms` |
+| Logs estructurados | Cada predicción registra `hash`, `es_ataque`, `proba`, `nivel`, `latencia_ms` en `journald` |
 | DO Monitor Alerts | Email automático si CPU >85%, Memoria >90% o Disco >80% |
 | MLflow UI | Historial de experimentos en `http://<IP>:5000` |
 
 ```bash
-# Logs del servicio
-ssh root@<IP> journalctl -u netshield -f
-
 # Logs del contenedor de la API
 ssh root@<IP> docker logs -f netshield-api-1
+
+# Estado de los contenedores
+ssh root@<IP> docker compose -f /opt/netshield/docker-compose.prod.yml ps
 ```

@@ -1,54 +1,12 @@
-name: CD — Sync y Deploy en Droplet
+# Este workflow ha sido integrado en ci.yml como jobs encadenados.
+# Se mantiene el archivo para no romper referencias externas,
+# pero no tiene disparador automático.
+
+name: CD — (desactivado, ver ci.yml)
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configurar clave SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DO_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DO_DROPLET_IP }} >> ~/.ssh/known_hosts
-
-      - name: Sincronizar código al Droplet
-        run: |
-          rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            --exclude='.venv' \
-            --exclude='.git' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='.terraform' \
-            --exclude='*.tfstate*' \
-            --exclude='mlflow/' \
-            --exclude='src/data/raw/' \
-            --exclude='src/data/validated/' \
-            --exclude='src/data/processed/' \
-            --exclude='src/data/features/' \
-            . root@${{ secrets.DO_DROPLET_IP }}:/opt/netshield/
-
-      - name: Construir imagen y reiniciar servicios en el Droplet
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DO_DROPLET_IP }}
-          username: root
-          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/netshield
-            docker compose -f docker-compose.prod.yml build api
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
-      - name: Health check post-deploy
-        run: |
-          sleep 20
-          curl -f http://${{ secrets.DO_DROPLET_IP }}:8000/health || exit 1
-          echo "Deploy exitoso — NetShield operativo."
+  workflow_dispatch:
+    inputs:
+      razon:
+        description: "Motivo del deploy manual"
+        required: true
