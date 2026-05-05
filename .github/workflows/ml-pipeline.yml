@@ -1,0 +1,75 @@
+name: ML Pipeline — Entrenamiento y Registro
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "data/**"
+      - "requirements.txt"
+
+jobs:
+  train-and-register:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      AWS_DEFAULT_REGION: eu-west-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Descargar datos desde S3
+        run: |
+          mkdir -p data/raw
+          aws s3 cp s3://netshield-data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
+            data/raw/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+
+      - name: Ingesta y validación
+        run: python -m src.data.ingesta
+
+      - name: Preprocesamiento
+        run: python -m src.data.preprocesamiento
+
+      - name: Feature engineering
+        run: python -m src.features.feature_engineering
+
+      - name: Entrenar modelo
+        # El script falla (exit 1) si no supera umbrales → pipeline se detiene
+        run: python -m src.models.entrenamiento
+
+      - name: Subir modelo a S3
+        run: |
+          aws s3 cp models/ids_model.pkl \
+            s3://netshield-models/$(git rev-parse --short HEAD)/ids_model.pkl
+          aws s3 cp models/scaler.pkl \
+            s3://netshield-models/$(git rev-parse --short HEAD)/scaler.pkl
+
+      - name: Notificar éxito
+        if: success()
+        run: echo "Modelo entrenado y registrado. Listo para CD."
+
+      - name: Notificar fallo
+        if: failure()
+        run: |
+          echo "El modelo no superó los umbrales mínimos."
+          echo "(F1-macro >= 0.85, AUC-ROC >= 0.90, Recall ataque >= 0.80)"
+          echo "No se procede al despliegue."

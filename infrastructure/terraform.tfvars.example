@@ -1,0 +1,17 @@
+# Copia este archivo a terraform.tfvars y rellena los valores reales.
+# NUNCA commitear terraform.tfvars (ya está en .gitignore).
+
+do_token          = "dop_v1_..."           # cloud.digitalocean.com/account/api/tokens
+spaces_access_id  = "..."                   # cloud.digitalocean.com/account/api/spaces-keys
+spaces_secret_key = "..."
+email_alertas     = "tu@email.com"
+
+# Nombre exacto del Droplet tal como aparece en el panel de DO
+droplet_name      = "mi-droplet"
+
+# Región del Droplet (ams3, fra1, nyc3, sfo3...)
+do_region         = "ams3"
+
+# Opcionales
+# entorno         = "dev"
+# nombre_proyecto = "netshield"

@@ -1,0 +1,25 @@
+name: netshield
+region: ams
+
+services:
+  - name: api
+    image:
+      registry_type: DOCR
+      registry: netshield
+      repository: netshield-api
+      tag: latest
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8000
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 30
+      failure_threshold: 3
+    envs:
+      - key: MODEL_PATH
+        value: src/models/ids_model.pkl
+      - key: SCALER_PATH
+        value: src/models/scaler.pkl
+      - key: MODEL_VERSION
+        value: "1.0.0"

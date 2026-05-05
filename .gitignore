@@ -1,0 +1,47 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# ── Entorno virtual ───────────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+
+# ── Datos (CSVs grandes, se generan con el pipeline) ─────────────────────────
+src/data/raw/
+src/data/validated/
+src/data/processed/
+src/data/features/
+
+# ── MLflow (estado local, no se sube al repo) ─────────────────────────────────
+mlruns/
+mlflow/
+mlflow.db
+
+# ── Terraform ─────────────────────────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# ── Tests y cobertura ─────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── IDE y SO ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
