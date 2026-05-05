@@ -92,7 +92,7 @@ jobs:
         working-directory: infrastructure/
         run: |
           terraform init \
-            -backend-config="endpoint=https://${{ vars.DO_REGION || 'fra1' }}.digitaloceanspaces.com" \
+            -backend-config="endpoints={s3=\"https://${{ vars.DO_REGION || 'fra1' }}.digitaloceanspaces.com\"}" \
             -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID }}" \
             -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
         env:
