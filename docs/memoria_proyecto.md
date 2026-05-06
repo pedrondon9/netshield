@@ -3,7 +3,7 @@
 **Asignatura:** Metodologías de Desarrollo y Despliegue de Aplicaciones para Ciencia de Datos (20GIAR)  
 **Autor:** Pedro Ndong  
 **Proyecto:** Proyecto 1 — Pipeline MLOps  
-**Repositorio:** https://github.com/pedrondong/netshield-ids  
+**Repositorio:** https://github.com/pedrondon9/netshield-ids  
 **Fecha:** 06/05/2026  
 
 ---

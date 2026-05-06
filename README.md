@@ -4,7 +4,7 @@
 > Universidad Internacional de Valencia (VIU) Grado en Ciencias de Datos e IA
 
 **Autor:** Pedro Ndong  
-**Repositorio:** https://github.com/pedrondong/netshield-ids
+**Repositorio:** https://github.com/pedrondon9/netshield-ids
 
 ---
 
@@ -168,7 +168,7 @@ netshield/
 ### Clonar y crear entorno virtual
 
 ```bash
-git clone https://github.com/pedrondong/netshield-ids
+git clone https://github.com/pedrondon9/netshield-ids
 cd netshield-ids
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
