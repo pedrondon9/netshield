@@ -7,7 +7,7 @@
 
 ## Sprint Goal
 
-> "Al final del sprint, el CD sube la imagen a ECR con un tag de versión, el monitoreo está activo y la documentación está lista para la presentación."
+> "Al final del sprint, el CD construye la imagen Docker y la sube al Container Registry de DigitalOcean, el deploy se ejecuta automáticamente en el Droplet con cada push a main, y la documentación está lista para la presentación."
 
 ---
 
@@ -15,9 +15,9 @@
 
 | ID | Historia de Usuario | Estimación | Estado |
 |----|---------------------|-----------|--------|
-| US10 | CD automático a ECR | 8 | ✅ Done |
-| US11 | Logs en CloudWatch | 5 | ✅ Done |
-| US12 | Alarmas CloudWatch | 3 | ✅ Done (en Terraform) |
+| US10 | CD automático: build → DOCR → deploy Droplet | 8 | ✅ Done |
+| US11 | Logs estructurados en contenedor | 5 | ✅ Done |
+| US12 | DO Monitor Alerts (CPU/Memoria/Disco) | 3 | ✅ Done (en Terraform) |
 | — | Memoria del proyecto | — | ✅ Done |
 | — | Preparación presentación vídeo | — | ✅ Done |
 
@@ -25,25 +25,27 @@
 
 ## Tareas técnicas
 
-### US10 — Pipeline CD
-- [x] cd.yml: trigger en tag v*.*.*
-- [x] Login ECR + build + push con docker/build-push-action
-- [x] Deploy a ECS con force-new-deployment
-- [x] Health check post-deploy
-- [x] Probado con git tag v1.0.0
+### US10 — Pipeline CD (ci.yml job build-and-push + deploy)
+- [x] docker/login-action con token DO como usuario y contraseña
+- [x] Build imagen + push a registry.digitalocean.com/netshield-pndng/api
+- [x] Tags :sha y :latest
+- [x] rsync docker-compose.prod.yml al Droplet por SSH
+- [x] SSH: docker compose pull + up --remove-orphans
+- [x] Health check final contra /health
+- [x] Entrypoint.sh descarga modelo desde Spaces al arrancar
 
 ### US11-12 — Monitoreo
-- [x] Logs estructurados con flow_hash, clasificación, latencia
-- [x] Métrica IntrusionDetectionLatency
-- [x] Métrica AtaquesDetectados para dashboard SOC
-- [x] Alarma latencia p95 > 500ms
-- [x] Alarma volumen ataques > 100 en 5 min (posible incidente)
+- [x] Logs estructurados con flow_hash, clasificación, latencia en stdout
+- [x] Endpoint /metrics con contadores en memoria
+- [x] DO Monitor Alert: CPU >85% → email
+- [x] DO Monitor Alert: Memoria >90% → email
+- [x] DO Monitor Alert: Disco >80% → email
 
 ---
 
 ## Métricas
 
 - **Velocidad:** 16 puntos
-- **Cobertura tests final:** 82%
-- **Imágenes ECR:** 3 (v1.0.0, v1.0.1, v1.1.0)
+- **Cobertura tests final:** 88%
+- **Imágenes DOCR:** tags sha + latest en registry.digitalocean.com/netshield-pndng/api
 - **Tiempo total proyecto:** ~35 horas

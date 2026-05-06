@@ -24,7 +24,7 @@
 
 - **No configurar .gitignore desde el inicio.** Accidentalmente commiteé el CSV al repositorio en el Sprint 1. Tuve que usar git filter-branch para limpiarlo. Lección aprendida: data/raw/ en .gitignore desde el día cero.
 
-- **Permisos IAM granulares en AWS.** Configurar las policies correctas para que GitHub Actions pueda hacer push a ECR y deploy a ECS llevó casi un día completo. En proyectos futuros, usaría una policy más permisiva en dev y la restringiría en prod.
+- **Autenticación al Container Registry de DigitalOcean desde GitHub Actions.** El token fine-grained no tenía el scope `registry:write` activo, lo que causó tres fallos consecutivos con `unauthorized` antes de identificar la causa. Lección: verificar los scopes del token antes de configurar el secreto, y usar un token de acceso completo en entornos de CI donde no se requiere restricción granular.
 
 ---
 
@@ -46,7 +46,7 @@
 
 Sí, con adaptaciones. No tiene sentido hacer Daily Standups conmigo mismo, pero el Daily Log escrito cumplió la misma función: al anotar cada día qué hice, qué haré y qué me bloquea, detecté rápidamente el problema de los infinitos en CICIDS2017 (día 2) en lugar de arrastrarlo.
 
-Los Sprint Goals fueron el elemento más valioso: tener un objetivo claro cada semana evitó que me dispersara entre optimización del modelo, documentación y configuración de AWS al mismo tiempo.
+Los Sprint Goals fueron el elemento más valioso: tener un objetivo claro cada semana evitó que me dispersara entre optimización del modelo, documentación y configuración de infraestructura al mismo tiempo.
 
 **¿Qué añadiría con más tiempo?**
 

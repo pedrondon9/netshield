@@ -7,7 +7,7 @@
 
 ## Sprint Goal
 
-> "Al final del sprint, la API corre en Docker, el CI ejecuta tests en cada push y la infraestructura AWS está definida en Terraform."
+> "Al final del sprint, la API corre en Docker, el CI ejecuta tests en cada push y la infraestructura DigitalOcean está definida en Terraform."
 
 ---
 
@@ -40,7 +40,7 @@
 - [x] Escalado con scaler.pkl cargado al arrancar
 - [x] Nivel de amenaza: CRITICO/ALTO/MEDIO/BAJO
 - [x] Logs con hash del flujo para auditoría
-- [x] Métricas CloudWatch (mock en local)
+- [x] Endpoint /metrics con contadores en memoria
 - [x] Dockerfile.api con healthcheck
 
 ### US08 — CI
@@ -48,11 +48,12 @@
 - [x] Verificado pipeline falla con cobertura < 70%
 
 ### US09 — Terraform
-- [x] S3 datos (versionado + cifrado AES256)
-- [x] S3 modelos (versionado)
-- [x] ECR con lifecycle policy (máx 10 imágenes)
-- [x] CloudWatch Log Group + 2 alarmas (latencia + volumen ataques)
-- [x] SNS topic + suscripción email
+- [x] Spaces datos (versionado, privado)
+- [x] Spaces modelos (versionado)
+- [x] Container Registry basic (netshield-pndng)
+- [x] Firewall: puertos 22, 80, 443, 8000, 5000
+- [x] DO Monitor Alerts: CPU >85%, Memoria >90%, Disco >80% → email
+- [x] Backend S3 en Spaces (netshield-tf-state)
 - [x] terraform plan ejecutado sin errores
 
 ---
@@ -64,8 +65,8 @@
 | 22/04 | Quality gate + tests | — |
 | 23/04 | API FastAPI /predict + /health | Bug con nombres de columnas CICIDS2017 vs JSON |
 | 24/04 | Docker build + compose | — |
-| 25/04 | CI workflow + Terraform S3/ECR | Permisos IAM granulares |
-| 26/04 | Terraform alarmas CloudWatch | — |
+| 25/04 | CI workflow + Terraform Spaces/DOCR | Nombres de bucket globales en Spaces (añadir prefijo único) |
+| 26/04 | Terraform firewall + DO Monitor Alerts | — |
 | 28/04 | Tests API + README actualizado | — |
 
 ---
@@ -74,8 +75,8 @@
 
 **Demostrado:**
 1. API en Docker: curl POST /predict → clasificación con probabilidad y nivel de amenaza
-2. GitHub Actions CI: push → badge verde ✅
-3. terraform plan: 0 errors, 9 resources
+2. GitHub Actions CI: push → lint + tests verdes ✅
+3. terraform plan: 0 errors, recursos DO (Registry, Spaces, Firewall, Alertas)
 4. docker-compose up levantando API + MLflow
 
 ---
@@ -85,4 +86,4 @@
 - **Velocidad:** 28 puntos
 - **Cobertura tests:** 80%
 - **Tiempo CI:** ~2 min 15 seg
-- **Recursos Terraform:** 9
+- **Recursos Terraform:** 7 (Registry, 2×Spaces, Firewall, 3×Monitor Alerts)
