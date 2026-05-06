@@ -1,7 +1,7 @@
 # NetShield — Pipeline MLOps: Detección de Intrusiones en Red
 
 > **Proyecto — Metodologías de Desarrollo y Despliegue de Aplicaciones para Ciencia de Datos (20GIAR)**  
-> Universidad Internacional de Valencia (VIU) · Máster en Data Analytics
+> Universidad Internacional de Valencia (VIU) Grado en Ciencias de Datos e IA
 
 **Autor:** Pedro Ndong  
 **Repositorio:** https://github.com/pedrondong/netshield-ids
