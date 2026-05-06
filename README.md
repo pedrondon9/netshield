@@ -21,6 +21,7 @@ Sistema MLOps completo para la detección automática de intrusiones en tráfico
 ### Pipeline de datos y modelo
 
 ```
+
 src/data/raw/
       │
       ▼
