@@ -55,13 +55,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
       - name: Autenticar con el Container Registry
-        run: doctl registry login --expiry-seconds 1200
+        run: |
+          echo "${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" | \
+            docker login registry.digitalocean.com \
+            -u "${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" --password-stdin
 
       - name: Construir imagen Docker
         run: |
