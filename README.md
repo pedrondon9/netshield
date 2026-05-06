@@ -188,6 +188,7 @@ Cada paso lee la salida del anterior. Ejecutar desde la raíz del proyecto:
 
 ```bash
 # 1. Ingesta y validación del dataset
+
 python -m src.data.ingesta
 # → src/data/validated/cicids_validated.csv
 
