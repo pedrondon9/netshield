@@ -39,7 +39,7 @@ entrenamiento.py        ← XGBoost + MLflow tracking
       │                    AUC-ROC  ≥ 0.90     si falla → pipeline se detiene
       │                    Recall   ≥ 0.80
       ▼
-src/models/ids_model.pkl + scaler.pkl
+src/models/ids_model.pkl + scaler.pkl.  
 ```
 
 ### Pipeline CI/CD
